@@ -752,8 +752,15 @@ class FCSFile(object):
             supplemental=False)
 
         if self._header.version in ('FCS3.0','FCS3.1'):
-            stext_begin = int(self._text['$BEGINSTEXT'])   # required keyword
-            stext_end = int(self._text['$ENDSTEXT'])       # required keyword
+            try:
+                stext_begin = int(self._text['$BEGINSTEXT'])   # required keyword
+                stext_end = int(self._text['$ENDSTEXT'])       # required keyword
+            except KeyError as e:
+                warnings.warn(
+                    "Either $BEGINSTEXT or $ENDSTEXT is missing. Both are set to zero."
+                )
+                stext_begin = 0
+                stext_end = 0
             if stext_begin and stext_end:
                 stext = read_fcs_text_segment(
                     buf=f,
@@ -814,8 +821,15 @@ class FCSFile(object):
                     format(str(e)))
                 self._analysis = {}
         elif self._header.version in ('FCS3.0', 'FCS3.1'):
-            analysis_begin = int(self._text['$BEGINANALYSIS'])
-            analysis_end = int(self._text['$ENDANALYSIS'])
+            try:
+                analysis_begin = int(self._text['$BEGINANALYSIS'])
+                analysis_end = int(self._text['$ENDANALYSIS'])
+            except KeyError as e:
+                warnings.warn(
+                    "Either $BEGINANALYSIS or $ENDSANALYSIS is missing. Both are set to zero."
+                )
+                analysis_begin = 0
+                analysis_end = 0
             if analysis_begin and analysis_end:
                 try:
                     self._analysis = read_fcs_text_segment(
