@@ -5,7 +5,7 @@ The analysis that FlowCal's Excel UI performs is divided roughly in two phases: 
 
 Processing of Calibration Beads
 -------------------------------
-The following steps are performed for each calibration beads sample specified in the **Beads** sheet of the :doc:`input Excel file<input_format>`:
+If a **Beads** sheet is specified, the following steps are performed for each calibration beads sample:
 
 1. :doc:`Density gating</fundamentals/density_gate>` is applied in the forward/side scatter channels. This is an automated procedure that eliminates microbead aggregates and debris.
 2. The individual microbead subpopulations are identified using automated clustering.
@@ -19,7 +19,7 @@ For an introductory discussion of flow cytometry calibration, go to the :doc:`fu
 
 Processing of Cell Samples
 --------------------------
-The following steps are performed for each cell sample specified in the **Samples** sheet of the :doc:`input Excel file<input_format>`:
+If a **Samples** sheet is specified, the following steps are performed for each sample:
 
 1. :doc:`Density gating</fundamentals/density_gate>` is applied in the forward/side scatter channels.
 2. Fluorescence data for each specified fluorescence channel is transformed to the units specified in the **Units** column of the :doc:`input Excel file<input_format>`.

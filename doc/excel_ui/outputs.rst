@@ -1,12 +1,14 @@
 Outputs of the Excel UI
 =======================
 
-During processing of the calibration beads and cell samples, ``FlowCal`` creates two folders with images and an output Excel file in the same location as the :doc:`input Excel file<input_format>`. Here we describe these. In what follows, <ID> refers to the value specified in the ID column of the input Excel file.
+The ``FlowCal`` Excel UI creates analysis plots and an output Excel file. If a Beads sheet is specified in the input Excel file, a `plot_beads` folder is created containing relevant plots. Similarly, if a Samples sheet is specified, a `plot_samples` folder is created with relevant plots. Beads and Samples sheets are also populated in the output Excel file if specified in the input Excel file.
 
 .. _excel-ui-outputs-plots:
 
 Plots
 -----
+
+Note: `<ID>` refers to the unique ID of a sample as labeled in the ID column of the input Excel file.
 
 1. The folder ``plot_beads`` contains plots of the individual steps of processing of the calibration particle samples:
 

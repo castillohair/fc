@@ -20,9 +20,9 @@ should contain the following tables:
       - **Time Channel**: Name of the time channel, as specified by the
         ``$PnN`` keyword in the associated FCS files.
 
-    - **Beads**: Describes the calibration beads samples that will be used
-      to calibrate cell samples in the **Samples** table. The following
-      information should be available for each beads sample:
+    - **Beads** (optional): Describes the calibration beads samples that will
+      be used to calibrate cell samples in the **Samples** table. The
+      following information should be available for each beads sample:
 
       - **ID**: Short string identifying the beads sample. Will be
         referenced by cell samples in the **Samples** table.
@@ -42,8 +42,9 @@ should contain the following tables:
       - **Clustering Channels**: The fluorescence channels used to identify
         the different bead subpopulations.
 
-    - **Samples**: Describes the biological samples to be processed. The
-      following information should be available for each sample:
+    - **Samples** (optional): Describes the biological samples to be
+      processed. The following information should be available for each
+      sample:
 
       - **ID**: Short string identifying the sample. Will be used as part
         of the plot's filenames and in the **Histograms** table in the
@@ -95,6 +96,10 @@ from matplotlib import pyplot as plt
 import numpy as np
 import pandas as pd
 import openpyxl
+try:
+    import xlrd
+except ImportError:
+    pass
 import zipfile
 
 import FlowCal.io
@@ -775,7 +780,9 @@ def process_samples_table(samples_table,
                     elif units.lower() == 'mef':
                         units_label = "Molecules of Equivalent Fluorophore, MEF"
                         # Check if transformation function is available
-                        if mef_transform_fxns[sample_row['Beads ID']] is None:
+                        if mef_transform_fxns is None or \
+                                mef_transform_fxns[sample_row['Beads ID']] \
+                                is None:
                             raise ExcelUIException("MEF transformation "
                                 "function not available")
 
@@ -1402,17 +1409,15 @@ def run(input_path=None,
 
      1. If `input_path` is not specified, show a dialog to choose an input
         Excel file.
-     2. Extract data from the Instruments, Beads, and Samples tables.
-     3. Process all the bead samples specified in the Beads table.
-     4. Generate statistics for each bead sample.
-     5. Process all the cell samples in the Samples table.
-     6. Generate statistics for each sample.
-     7. If requested, generate a histogram table for each fluorescent
-        channel specified for each sample.
-     8. Generate a table with run time, date, FlowCal version, among
-        others.
-     9. Save statistics and (if requested) histograms in an output Excel
-        file.
+     2. Read the Instruments table from the Instruments sheet.
+     3. If a Beads sheet is specified, read the Beads table, process beads
+        samples, and calculate statistics.
+     4. If a Samples sheet is specified, read the Samples table, process
+        samples, calculate statistics, and (if requested) generate a
+        histogram table describing each fluorescence channel of each sample.
+     5. Generate a table describing the run (e.g. with run time, date,
+        FlowCal version, etc.).
+     6. Save tables and calculated statistics to an output Excel file.
 
     Parameters
     ----------
@@ -1430,10 +1435,9 @@ def run(input_path=None,
         sample, and each beads sample.
     hist_sheet : bool, optional
         Whether to generate a sheet in the output Excel file specifying
-        histogram bin information.
+        histogram bin information. Ignored if Samples sheet is not specified.
 
     """
-
     # If input file has not been specified, show open file dialog
     if input_path is None:
         input_path = show_open_file_dialog(filetypes=[('Excel files',
@@ -1442,72 +1446,108 @@ def run(input_path=None,
             if verbose:
                 print("No input file selected.")
             return
+
     # Extract directory, filename, and filename with no extension from path
     input_dir, input_filename = os.path.split(input_path)
     input_filename_no_ext, __ = os.path.splitext(input_filename)
 
-    # Read relevant tables from workbook
+    # Process tables
     if verbose:
         print("Reading {}...".format(input_filename))
+    table_list = []  # List of (str, DataFrame) tuples, one for each
+                     # sheet to be written to the output Excel file.
+
     instruments_table = read_table(input_path,
                                    sheetname='Instruments',
                                    index_col='ID')
-    beads_table = read_table(input_path,
-                             sheetname='Beads',
-                             index_col='ID')
-    samples_table = read_table(input_path,
-                               sheetname='Samples',
-                               index_col='ID')
+    table_list.append(('Instruments', instruments_table))
 
     # Process beads samples
-    beads_samples, mef_transform_fxns, mef_outputs = process_beads_table(
-        beads_table,
-        instruments_table,
-        base_dir=input_dir,
-        verbose=verbose,
-        plot=plot,
-        plot_dir='plot_beads',
-        full_output=True)
+    try:
+        beads_table = read_table(input_path,
+                                 sheetname='Beads',
+                                 index_col='ID')
+    except KeyError as e:
+        if 'Beads' in str(e):
+            # no Beads tab (openpyxl)
+            beads_table = None
+        else:
+            raise
+    except Exception as e:
+        if 'xlrd' in sys.modules and isinstance(e, xlrd.biffh.XLRDError) \
+                and 'Beads' in str(e):
+            # no Beads tab (xlrd)
+            beads_table = None
+        else:
+            raise
 
-    # Add stats to beads table
-    if verbose:
-        print("")
-        print("Calculating statistics for beads...")
-    add_beads_stats(beads_table, beads_samples, mef_outputs)
+    if beads_table is not None:
+        beads_samples, mef_transform_fxns, mef_outputs = process_beads_table(
+            beads_table,
+            instruments_table,
+            base_dir=input_dir,
+            verbose=verbose,
+            plot=plot,
+            plot_dir='plot_beads',
+            full_output=True)
+
+        # Add stats to beads table
+        if verbose:
+            print("")
+            print("Calculating statistics for beads...")
+        add_beads_stats(beads_table, beads_samples, mef_outputs)
+        table_list.append(('Beads', beads_table))
+    else:
+        beads_samples = mef_transform_fxns = mef_outputs = None
 
     # Process samples
-    samples = process_samples_table(
-        samples_table,
-        instruments_table,
-        mef_transform_fxns=mef_transform_fxns,
-        beads_table=beads_table,
-        base_dir=input_dir,
-        verbose=verbose,
-        plot=plot,
-        plot_dir='plot_samples')
+    try:
+        samples_table = read_table(input_path,
+                                   sheetname='Samples',
+                                   index_col='ID')
+    except KeyError as e:
+        if 'Samples' in str(e):
+            # no Samples tab (openpyxl)
+            samples_table = None
+        else:
+            raise
+    except Exception as e:
+        if 'xlrd' in sys.modules and isinstance(e, xlrd.biffh.XLRDError) \
+                and 'Samples' in str(e):
+            # no Samples tab (xlrd)
+            samples_table = None
+        else:
+            raise
 
-    # Add stats to samples table
-    if verbose:
-        print("")
-        print("Calculating statistics for all samples...")
-    add_samples_stats(samples_table, samples)
+    if samples_table is not None:
+        samples = process_samples_table(
+            samples_table,
+            instruments_table,
+            mef_transform_fxns=mef_transform_fxns,
+            beads_table=beads_table,
+            base_dir=input_dir,
+            verbose=verbose,
+            plot=plot,
+            plot_dir='plot_samples')
 
-    # Generate histograms
-    if hist_sheet:
+        # Add stats to samples table
         if verbose:
-            print("Generating histograms table...")
-        histograms_table = generate_histograms_table(samples_table, samples)
+            print("")
+            print("Calculating statistics for all samples...")
+        add_samples_stats(samples_table, samples)
+        table_list.append(('Samples', samples_table))
+
+        # Generate histograms
+        if hist_sheet:
+            if verbose:
+                print("Generating histograms table...")
+            histograms_table = generate_histograms_table(samples_table, samples)
+            table_list.append(('Histograms', histograms_table))
+    else:
+        samples = None
 
     # Generate about table
     about_table = generate_about_table({'Input file path': input_path})
-
-    # Generate list of tables to save
-    table_list = []
-    table_list.append(('Instruments', instruments_table))
-    table_list.append(('Beads', beads_table))
-    table_list.append(('Samples', samples_table))
-    if hist_sheet:
-        table_list.append(('Histograms', histograms_table))
     table_list.append(('About Analysis', about_table))
 
     # Write output excel file
