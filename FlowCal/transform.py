@@ -223,7 +223,7 @@ def to_rfi(data,
                     ag = data.amplifier_gain(channel)
                     # If the linear gain has not been specified, it should be
                     # assumed to be one.
-                    if ag is None:
+                    if ag is None or ag == 0:
                         ag = 1.
                 else:
                     ag = 1.
